@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build Docker image
+    - name: Build Docker image with unique tag
       run: |
         docker build -t ranaacrregistry.azurecr.io/myapp:${{ github.sha }} .
         docker build -t ranaacrregistry.azurecr.io/myapp:latest .
