@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v2
     
     - name: Build Docker image with unique tag
       run: |
@@ -22,3 +22,7 @@ jobs:
         echo "${{ secrets.AZURE_REGISTRY_PASSWORD }}" | docker login -u ranaacrregistry --password-stdin ranaacrregistry.azurecr.io
         docker push ranaacrregistry.azurecr.io/myapp:${{ github.sha }}
         docker push ranaacrregistry.azurecr.io/myapp:latest
+    
+    - name: Deploy to AKS
+      run: |
+        kubectl set image deployment/myapp-deployment myapp=ranaacrregistry.azurecr.io/myapp:latest --record
