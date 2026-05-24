@@ -1,10 +1,8 @@
 trigger:
 - main
 
-# ১. আপনার তৈরি করা লোকাল এজেন্ট পুল
 pool: 'MyLocalPool'
 
-# ২. লাইব্রেরি থেকে আপনার গিটহাব টোকেন ভ্যারিয়েবল গ্রুপ লিংক
 variables:
 - group: github-att
 
@@ -15,11 +13,10 @@ stages:
   - job: Build
     displayName: 'Build and Push to ACR'
     steps:
-    # ৩. ডকার ইমেজ বিল্ড এবং এসিআর (ACR)-এ পুশ করা
     - task: Docker@2
       inputs:
-        containerRegistry: 'acr-service-connection' # আপনার তৈরি করা ACR সার্ভিস কানেকশনের নাম
-        repository: 'ranacse/sales-dashboard-v1'      # আপনার ইমেজ বা রিপোজিটরির নাম
+        containerRegistry: 'acr-service-connection'
+        repository: 'ranacse/sales-dashboard-v1'
         command: 'buildAndPush'
         Dockerfile: '**/Dockerfile'
         tags: |
@@ -33,20 +30,19 @@ stages:
   - job: UpdateGit
     displayName: 'Update Manifest Repo'
     steps:
-    # ৪. ফাইনাল স্ক্রিপ্ট যা লোকাল এজেন্টে রান হয়ে গিটহাবে পুশ করবে
-    - script: |
+    - powershell: |
         git config --global user.email "saif99cse@gmail.com"
         git config --global user.name "saif99cse"
         
-        # আপনার সেকেন্ড ম্যানিফেস্ট রিপোজিটরি ক্লোন করা (টোকেন সহ)
+        # সেকেন্ড ম্যানিফেস্ট রিপোজিটরি ক্লোন
         git clone https://$(token)@github.com/ranacse/html-manifest-repo.git
         cd html-manifest-repo
         
-        # কুবারনেটিস ফাইলে ডকার ইমেজের ট্যাগটি নতুন বিল্ড আইডি দিয়ে আপডেট করা
-        sed -i 's|ranacse/sales-dashboard-v1:.*|ranacse/sales-dashboard-v1:$(Build.BuildId)|g' deployment.yaml
+        # উইন্ডোজ পাওয়ারশেল দিয়ে কুবারনেটিস ফাইল আপডেট (ভিডিওর sed এর ফাইনাল উইন্ডোজ রূপ)
+        (Get-Content deployment.yaml) -replace 'ranacse/sales-dashboard-v1:.*', "ranacse/sales-dashboard-v1:$(Build.BuildId)" | Set-Content deployment.yaml
         
-        # পরিবর্তনটি গিটহাবে পুশ করা
+        # গিটহাবে ফাইনাল পুশ
         git add deployment.yaml
         git commit -m "Update deployment spec image tag to $(Build.BuildId)"
         git push origin main
-      displayName: 'Update Git Image Tag'
+      displayName: 'Update Git Image Tag (Windows Native)'
