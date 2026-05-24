@@ -1,58 +1,52 @@
 trigger:
 - main
 
-
+# ১. আপনার তৈরি করা লোকাল এজেন্ট পুল
 pool: 'MyLocalPool'
 
+# ২. লাইব্রেরি থেকে আপনার গিটহাব টোকেন ভ্যারিয়েবল গ্রুপ লিংক
 variables:
-  # আপনার তৈরি করা সার্ভিস কানেকশনের নাম
-  acrServiceConnection: 'acr-service-connection'
-  # আপনার ACR এর লগইন সার্ভার নাম
-  acrRepository: 'html-app'
-  # আপনার Azure Repos এর ম্যানিফেস্ট রিপোজিটরি নাম
-  manifestRepoName: 'html-manifest-repo'
+- group: github-att
 
 stages:
-- stage: BuildAndPush
-  displayName: 'Build and Push Docker Image'
+- stage: Build
+  displayName: 'Build and Push Stage'
   jobs:
   - job: Build
+    displayName: 'Build and Push to ACR'
     steps:
-    # ১. ডকার ইমেজ বিল্ড এবং ACR-এ পুশ করা
+    # ৩. ডকার ইমেজ বিল্ড এবং এসিআর (ACR)-এ পুশ করা
     - task: Docker@2
-      displayName: 'Build and Push to ACR'
       inputs:
-        containerRegistry: '$(acrServiceConnection)'
-        repository: '$(acrRepository)'
+        containerRegistry: 'acr-service-connection' # আপনার তৈরি করা ACR সার্ভিস কানেকশনের নাম
+        repository: 'ranacse/sales-dashboard-v1'      # আপনার ইমেজ বা রিপোজিটরির নাম
         command: 'buildAndPush'
         Dockerfile: '**/Dockerfile'
         tags: |
           $(Build.BuildId)
-          latest
 
 - stage: UpdateManifest
-  displayName: 'Update Kubernetes Manifest'
-  dependsOn: BuildAndPush
+  displayName: 'Update Kubernetes Manifest Stage'
+  dependsOn: Build
+  condition: succeeded()
   jobs:
   - job: UpdateGit
+    displayName: 'Update Manifest Repo'
     steps:
-    # ২. স্ক্রিপ্টের মাধ্যমে ম্যানিফেস্ট রিপোজিটরির deployment.yaml আপডেট করা
+    # ৪. ফাইনাল স্ক্রিপ্ট যা লোকাল এজেন্টে রান হয়ে গিটহাবে পুশ করবে
     - script: |
-        # গিট কনফিগারেশন
-        git config --global user.email "devops-bot@azure.com"
-        git config --global user.name "Azure DevOps Bot"
+        git config --global user.email "saif99cse@gmail.com"
+        git config --global user.name "saif99cse"
         
-        # সিস্টেম এক্সেস টোকেন ব্যবহার করে আপনার ম্যানিফেস্ট রিপোজিটরি ক্লোন করা
-        git clone https://$(System.AccessToken)@dev.azure.com/$(System.OrganizationName)/$(System.TeamProject)/_git/$(manifestRepoName)
-        cd $(manifestRepoName)
+        # আপনার সেকেন্ড ম্যানিফেস্ট রিপোজিটরি ক্লোন করা (টোকেন সহ)
+        git clone https://$(token)@github.com/ranacse/html-manifest-repo.git
+        cd html-manifest-repo
         
-        # deployment.yaml ফাইলে ইমেজের ট্যাগ নতুন BuildId দিয়ে পরিবর্তন করা
-        sed -i 's|image: .*|image: ranaacrregistry.azurecr.io/$(acrRepository):$(Build.BuildId)|g' deployment.yaml
+        # কুবারনেটিস ফাইলে ডকার ইমেজের ট্যাগটি নতুন বিল্ড আইডি দিয়ে আপডেট করা
+        sed -i 's|ranacse/sales-dashboard-v1:.*|ranacse/sales-dashboard-v1:$(Build.BuildId)|g' deployment.yaml
         
-        # পরিবর্তনটি গিট-এ পুশ করা
+        # পরিবর্তনটি গিটহাবে পুশ করা
         git add deployment.yaml
-        git commit -m "Automated image tag update to $(Build.BuildId) [skip ci]"
+        git commit -m "Update deployment spec image tag to $(Build.BuildId)"
         git push origin main
-      displayName: 'Update Image Tag in Manifest Repo'
-      env:
-        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      displayName: 'Update Git Image Tag'
