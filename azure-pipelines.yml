@@ -1,8 +1,8 @@
 trigger:
 - main
 
-pool:
-  vmImage: 'ubuntu-latest'
+
+pool: 'MyLocalPool'
 
 variables:
   # আপনার তৈরি করা সার্ভিস কানেকশনের নাম
