@@ -1,0 +1,58 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # আপনার তৈরি করা সার্ভিস কানেকশনের নাম
+  acrServiceConnection: 'acr-service-connection'
+  # আপনার ACR এর লগইন সার্ভার নাম
+  acrRepository: 'html-app'
+  # আপনার Azure Repos এর ম্যানিফেস্ট রিপোজিটরি নাম
+  manifestRepoName: 'html-manifest-repo'
+
+stages:
+- stage: BuildAndPush
+  displayName: 'Build and Push Docker Image'
+  jobs:
+  - job: Build
+    steps:
+    # ১. ডকার ইমেজ বিল্ড এবং ACR-এ পুশ করা
+    - task: Docker@2
+      displayName: 'Build and Push to ACR'
+      inputs:
+        containerRegistry: '$(acrServiceConnection)'
+        repository: '$(acrRepository)'
+        command: 'buildAndPush'
+        Dockerfile: '**/Dockerfile'
+        tags: |
+          $(Build.BuildId)
+          latest
+
+- stage: UpdateManifest
+  displayName: 'Update Kubernetes Manifest'
+  dependsOn: BuildAndPush
+  jobs:
+  - job: UpdateGit
+    steps:
+    # ২. স্ক্রিপ্টের মাধ্যমে ম্যানিফেস্ট রিপোজিটরির deployment.yaml আপডেট করা
+    - script: |
+        # গিট কনফিগারেশন
+        git config --global user.email "devops-bot@azure.com"
+        git config --global user.name "Azure DevOps Bot"
+        
+        # সিস্টেম এক্সেস টোকেন ব্যবহার করে আপনার ম্যানিফেস্ট রিপোজিটরি ক্লোন করা
+        git clone https://$(System.AccessToken)@dev.azure.com/$(System.OrganizationName)/$(System.TeamProject)/_git/$(manifestRepoName)
+        cd $(manifestRepoName)
+        
+        # deployment.yaml ফাইলে ইমেজের ট্যাগ নতুন BuildId দিয়ে পরিবর্তন করা
+        sed -i 's|image: .*|image: ranaacrregistry.azurecr.io/$(acrRepository):$(Build.BuildId)|g' deployment.yaml
+        
+        # পরিবর্তনটি গিট-এ পুশ করা
+        git add deployment.yaml
+        git commit -m "Automated image tag update to $(Build.BuildId) [skip ci]"
+        git push origin main
+      displayName: 'Update Image Tag in Manifest Repo'
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
