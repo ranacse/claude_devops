@@ -8,10 +8,9 @@ variables:
 
 stages:
 - stage: Build
-  displayName: 'Build and Push Stage'
+  displayName: 'Build and Push'
   jobs:
   - job: Build
-    displayName: 'Build and Push to ACR'
     steps:
     - task: Docker@2
       inputs:
@@ -22,27 +21,23 @@ stages:
         tags: |
           $(Build.BuildId)
 
-- stage: UpdateManifest
-  displayName: 'Update Kubernetes Manifest Stage'
+- stage: Deploy
+  displayName: 'Deploy to AKS'
   dependsOn: Build
-  condition: succeeded()
   jobs:
-  - job: UpdateGit
-    displayName: 'Update Manifest Repo'
+  - job: DeployJob
     steps:
     - powershell: |
         git config --global user.email "saif99cse@gmail.com"
         git config --global user.name "saif99cse"
-        
-        # সেকেন্ড ম্যানিফেস্ট রিপোজিটরি ক্লোন
         git clone https://$(token)@github.com/ranacse/html-manifest-repo.git
         cd html-manifest-repo
-        
-        # উইন্ডোজ পাওয়ারশেল দিয়ে কুবারনেটিস ফাইল আপডেট (ভিডিওর sed এর ফাইনাল উইন্ডোজ রূপ)
         (Get-Content deployment.yaml) -replace 'ranacse/sales-dashboard-v1:.*', "ranacse/sales-dashboard-v1:$(Build.BuildId)" | Set-Content deployment.yaml
-        
-        # গিটহাবে ফাইনাল পুশ
         git add deployment.yaml
-        git commit -m "Update deployment spec image tag to $(Build.BuildId)"
+        git commit -m "Update tag $(Build.BuildId)"
         git push origin main
-      displayName: 'Update Git Image Tag (Windows Native)'
+      displayName: 'Update Git Manifest'
+
+    - powershell: |
+        kubectl set image deployment/myapp-deployment myapp-container=ranacse/sales-dashboard-v1:$(Build.BuildId)
+      displayName: 'Force Update AKS Cluster'
